@@ -13,95 +13,106 @@ type Path struct {
 	TotalWeight int
 }
 
-func FindShortestPath(g *graph.Graph, initialVertex *graph.Vertex, finalDestination *graph.Vertex) (*Path, error) {
-	worker := initWorker(g, initialVertex, finalDestination)
+func FindShortestPath(initialVertex *graph.Vertex, finalDestination *graph.Vertex) (Path, error) {
+	worker := initWorker(initialVertex, finalDestination)
 	return worker.findShortestPath()
 }
 
 type worker struct {
-	unvisitedVertices heap.Heap[*vertexWrapper]
-	cur               *vertexWrapper
-	finalDestination  *vertexWrapper
+	verticesVisited  map[*graph.Vertex]bool
+	minHeap          heap.Heap[vertexWrapper]
+	cur              vertexWrapper
+	finalDestination *graph.Vertex
 
-	vertexToWrapper map[*graph.Vertex]*vertexWrapper
+	vertexToWrapper map[*graph.Vertex]vertexWrapper
 }
 
 type vertexWrapper struct {
 	vertex *graph.Vertex
-	path   *Path
+	path   Path
 }
 
-func (w *worker) newVertexWrapper(vertex *graph.Vertex) *vertexWrapper {
-	vw := &vertexWrapper{
+func (w *worker) newVertexWrapper(vertex *graph.Vertex) vertexWrapper {
+	vw := vertexWrapper{
 		vertex: vertex,
-		path: &Path{
+		path: Path{
 			TotalWeight: math.MaxInt,
 		},
 	}
 
 	if w.vertexToWrapper == nil {
-		w.vertexToWrapper = map[*graph.Vertex]*vertexWrapper{}
+		w.vertexToWrapper = map[*graph.Vertex]vertexWrapper{}
 	}
 	w.vertexToWrapper[vertex] = vw
 
 	return vw
 }
 
-func (v *vertexWrapper) LessThan(other any) bool {
-	return v.path.TotalWeight < other.(*vertexWrapper).path.TotalWeight
+func (v vertexWrapper) LessThan(other any) bool {
+	return v.path.TotalWeight < other.(vertexWrapper).path.TotalWeight
 }
 
-func initWorker(g *graph.Graph, initialVertex *graph.Vertex, finalDestination *graph.Vertex) worker {
-	unvisitedVertices, _ := heap.CreateHeap(heap.HeapTypeMin, []*vertexWrapper{})
+func initWorker(initialVertex *graph.Vertex, finalDestination *graph.Vertex) worker {
+	minHeap, _ := heap.CreateHeap(heap.HeapTypeMin, []vertexWrapper{})
 
 	w := worker{
-		unvisitedVertices: unvisitedVertices,
+		verticesVisited:  map[*graph.Vertex]bool{},
+		minHeap:          minHeap,
+		finalDestination: finalDestination,
 	}
 
-	for v := range g.Vertices {
-		wrapper := w.newVertexWrapper(v)
-
-		if v == initialVertex {
-			wrapper.path.TotalWeight = 0
-			w.cur = wrapper
-		} else {
-			unvisitedVertices.Push(wrapper)
-		}
-
-		if v == finalDestination {
-			w.finalDestination = wrapper
-		}
-	}
+	w.cur = w.newVertexWrapper(initialVertex)
+	w.cur.path.TotalWeight = 0
 
 	return w
 }
 
-func (w *worker) findShortestPath() (*Path, error) {
-	for w.unvisitedVertices.Len() > 0 {
-		// First, update the tentative distances if a shorter path has been found to any neighbor
+func (w *worker) findShortestPath() (Path, error) {
+	for w.cur.vertex != w.finalDestination {
 		for edge := range w.cur.vertex.Edges {
-			neighbor := w.vertexToWrapper[edge.Vertex1]
-			if neighbor == w.cur {
-				neighbor = w.vertexToWrapper[edge.Vertex2]
+			w.verticesVisited[w.cur.vertex] = true
+
+			neighborVertex := edge.Vertex1
+			if neighborVertex == w.cur.vertex {
+				neighborVertex = edge.Vertex2
+			}
+
+			neighbor, wrapperExists := w.vertexToWrapper[neighborVertex]
+			if !wrapperExists {
+				neighbor = w.newVertexWrapper(neighborVertex)
 			}
 
 			potentialNewDist := w.cur.path.TotalWeight + edge.Weight
 
 			if potentialNewDist < neighbor.path.TotalWeight {
-				neighbor.path = &Path{
+				neighbor.path = Path{
 					TotalWeight: potentialNewDist,
 					Edges:       append(w.cur.path.Edges, edge),
 				}
+
+				// Prioritize the neighbor based off of its new distance
+				w.minHeap.Push(neighbor)
+
+				// update our saved wrapper.
+				w.vertexToWrapper[neighbor.vertex] = neighbor
 			}
 		}
 
-		w.cur = w.unvisitedVertices.Pop()
+		// ensure we only visit each node once.
+		for keepPopping := true; keepPopping; {
+			if w.minHeap.Len() == 0 {
+				return Path{}, fmt.Errorf("no path found")
+			}
 
-		if w.cur == w.finalDestination {
-			// we have found our path
-			return w.cur.path, nil
+			w.cur = w.minHeap.Pop()
+
+			if !w.verticesVisited[w.cur.vertex] {
+				keepPopping = false
+			} else if w.minHeap.Len() == 0 {
+				return Path{}, fmt.Errorf("could not find a path to %s", w.finalDestination.ID)
+			}
 		}
 	}
 
-	return nil, fmt.Errorf("no path found")
+	return w.cur.path, nil
 }

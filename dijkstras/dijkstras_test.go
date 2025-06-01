@@ -1,8 +1,10 @@
 package dijkstras
 
 import (
+	"log"
 	"practice/graph"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Nick-Anderssohn/go-ds/set"
@@ -67,11 +69,15 @@ var (
 	}
 )
 
-// This is the graph from this video: https://youtu.be/gdmfOwyQlcI?si=9IsOED253YMADyWO&t=250
-var exampleGraph = graph.InitGraph(set.FromSlice(edges))
+func init() {
+	log.Println("running test init")
+
+	// This is the graph from this video: https://youtu.be/gdmfOwyQlcI?si=9IsOED253YMADyWO&t=250
+	graph.InitGraph(set.FromSlice(edges))
+}
 
 func TestDijkstras(t *testing.T) {
-	result, err := FindShortestPath(&exampleGraph, VertexA, VertexF)
+	result, err := FindShortestPath(VertexA, VertexF)
 
 	if err != nil {
 		t.Fatalf("an error occurred: %v", err)
@@ -84,6 +90,33 @@ func TestDijkstras(t *testing.T) {
 	// It is valid for the result to be either expectedPath1 or expectedPath2 since both paths
 	// have a total weight of 11.
 	if !slices.Equal(result.Edges, expectedPath1) && !slices.Equal(result.Edges, expectedPath2) {
-		t.Fatalf("result is not equivalent to expected")
+		t.Errorf(
+			"expected:\n%s\nor\n%s\nbut got:\n%s",
+			edgesToString(expectedPath1),
+			edgesToString(expectedPath2),
+			edgesToString(result.Edges),
+		)
 	}
+}
+
+func edgesToString(edges []*graph.Edge) string {
+	if len(edges) == 0 {
+		return ""
+	}
+
+	b := strings.Builder{}
+
+	for _, edge := range edges[:len(edges)-1] {
+		b.WriteString(edge.Vertex1.ID)
+		b.WriteString(" <---> ")
+		b.WriteString(edge.Vertex2.ID)
+		b.WriteRune('\n')
+	}
+
+	edge := edges[len(edges)-1]
+	b.WriteString(edge.Vertex1.ID)
+	b.WriteString(" <---> ")
+	b.WriteString(edge.Vertex2.ID)
+
+	return b.String()
 }
