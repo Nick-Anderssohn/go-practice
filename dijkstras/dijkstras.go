@@ -69,9 +69,9 @@ func initWorker(initialVertex *graph.Vertex, finalDestination *graph.Vertex) wor
 
 func (w *worker) findShortestPath() (Path, error) {
 	for w.cur.vertex != w.finalDestination {
-		for edge := range w.cur.vertex.Edges {
-			w.verticesVisited[w.cur.vertex] = true
+		w.verticesVisited[w.cur.vertex] = true
 
+		for edge := range w.cur.vertex.Edges {
 			neighborVertex := edge.Vertex1
 			if neighborVertex == w.cur.vertex {
 				neighborVertex = edge.Vertex2
